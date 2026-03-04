@@ -27,12 +27,16 @@ git clone https://github.com/SkyNinjaX/disciplinary-booking-app.git
 cd disciplinary-booking-app
 ```
 👤 Demo Credentials
-Role
-Username      Password
+
         Admin
-admin          admin123
+Username : admin
+Password : admin123
+
         Teacher
-teacher1      teacher123
-⚠️ Security Note
+Username : teacher1     
+Password : teacher123
+
+## ⚠️ Security Note
+
 This is a demo project for portfolio purposes. Passwords are stored in plaintext in users.json for simplicity. In production, use hashed passwords and environment variables.
 
