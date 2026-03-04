@@ -26,13 +26,13 @@ A role-based web application for tracking student disciplinary records, built wi
 git clone https://github.com/SkyNinjaX/disciplinary-booking-app.git
 cd disciplinary-booking-app
 ```
-👤 Demo Credentials
+##👤 Demo Credentials
 
-        Admin
+Admin
 Username : admin
 Password : admin123
 
-        Teacher
+Teacher
 Username : teacher1     
 Password : teacher123
 
