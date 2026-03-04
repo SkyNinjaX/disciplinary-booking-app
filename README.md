@@ -29,10 +29,13 @@ cd disciplinary-booking-app
 ##👤 Demo Credentials
 
 Admin
+
 Username : admin
+
 Password : admin123
 
 Teacher
+
 Username : teacher1     
 Password : teacher123
 
