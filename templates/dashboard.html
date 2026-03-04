@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold"><i class="fas fa-table"></i> Disciplinary Records</h2>
+    <div class="flex gap-3">
+        <!-- Auto-refresh indicator -->
+        <div class="flex items-center gap-2 text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+            <div id="refreshIndicator" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span>Auto-refresh: <span id="countdown">30</span>s</span>
+        </div>
+        <!-- Manual refresh button -->
+        <button onclick="manualRefresh()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2">
+            <i class="fas fa-sync-alt" id="refreshIcon"></i> Refresh
+        </button>
+        {% if role == 'admin' or role == 'teacher' %}
+        <a href="{{ url_for('add_record') }}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+            <i class="fas fa-plus"></i> Add Record
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="bg-white p-4 rounded-lg shadow mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <input type="text" id="searchName" placeholder="Search by name..." 
+               class="p-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <input type="text" id="searchClass" placeholder="Search by class..." 
+               class="p-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <input type="date" id="searchDate" 
+               class="p-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <button onclick="filterRecords()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+            <i class="fas fa-filter"></i> Filter
+        </button>
+    </div>
+</div>
+
+<!-- Records Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full" id="recordsTable">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Offense</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Teacher</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    {% if role == 'admin' %}
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200" id="recordsBody">
+                {% for record in records %}
+                <tr class="record-row" data-name="{{ record['student_name'] }}" data-class="{{ record['student_class'] }}" data-date="{{ record['date'] }}">
+                    <td class="px-6 py-4 text-sm text-gray-500">{{ record['id'] }}</td>
+                    <td class="px-6 py-4 font-medium">{{ record['student_name'] }}</td>
+                    <td class="px-6 py-4">{{ record['student_class'] or '-' }}</td>
+                    <td class="px-6 py-4">{{ record['offense'] }}</td>
+                    <td class="px-6 py-4">{{ record['teacher'] }}</td>
+                    <td class="px-6 py-4">{{ record['date'] }}</td>
+                    <td class="px-6 py-4">
+                        {% if record['detention_flag'] %}
+                        <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
+                            <i class="fas fa-exclamation-triangle"></i> DETENTION
+                        </span>
+                        {% else %}
+                        <span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                            <i class="fas fa-check"></i> OK
+                        </span>
+                        {% endif %}
+                    </td>
+                    {% if role == 'admin' %}
+                    <td class="px-6 py-4">
+                        <a href="{{ url_for('delete_record', record_id=record['id']) }}" 
+                           class="text-red-500 hover:text-red-700"
+                           onclick="return confirm('Delete this record?')">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not records %}
+    <div class="text-center py-8 text-gray-500">
+        <i class="fas fa-inbox text-4xl mb-2"></i>
+        <p>No records found.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Last updated timestamp -->
+<div class="mt-4 text-sm text-gray-500 text-right">
+    Last updated: <span id="lastUpdated">{{ records|length }} records</span>
+</div>
+
+<script>
+// Auto-refresh configuration
+const AUTO_REFRESH_INTERVAL = 30; // seconds
+let countdown = AUTO_REFRESH_INTERVAL;
+let isRefreshing = false;
+
+// Countdown timer
+const countdownInterval = setInterval(() => {
+    countdown--;
+    document.getElementById('countdown').textContent = countdown;
+    
+    if (countdown <= 0) {
+        countdown = AUTO_REFRESH_INTERVAL;
+        if (!isRefreshing) {
+            autoRefresh();
+        }
+    }
+}, 1000);
+
+// Manual refresh function
+async function manualRefresh() {
+    if (isRefreshing) return;
+    
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    
+    try {
+        await refreshTable();
+        countdown = AUTO_REFRESH_INTERVAL; // Reset countdown
+        document.getElementById('countdown').textContent = countdown;
+    } catch (error) {
+        console.error('Refresh failed:', error);
+        alert('Failed to refresh. Please reload the page.');
+    } finally {
+        icon.classList.remove('fa-spin');
+    }
+}
+
+// Auto-refresh function
+async function autoRefresh() {
+    isRefreshing = true;
+    const indicator = document.getElementById('refreshIndicator');
+    indicator.classList.remove('bg-green-500');
+    indicator.classList.add('bg-yellow-500');
+    
+    try {
+        await refreshTable();
+        indicator.classList.remove('bg-yellow-500');
+        indicator.classList.add('bg-green-500');
+    } catch (error) {
+        console.error('Auto-refresh failed:', error);
+        indicator.classList.remove('bg-yellow-500');
+        indicator.classList.add('bg-red-500');
+    } finally {
+        isRefreshing = false;
+    }
+}
+
+// Fetch and update table
+async function refreshTable() {
+    const response = await fetch('/api/records');
+    if (!response.ok) throw new Error('Failed to fetch');
+    
+    const records = await response.json();
+    updateTable(records);
+    
+    // Update timestamp
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent = 
+        `${records.length} records • ${now.toLocaleTimeString()}`;
+}
+
+// Update table with new data
+function updateTable(records) {
+    const tbody = document.getElementById('recordsBody');
+    const isAdmin = {{ 'true' if role == 'admin' else 'false' }};
+    
+    tbody.innerHTML = '';
+    
+    if (records.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="${isAdmin ? '8' : '7'}" class="text-center py-8 text-gray-500">
+                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                    <p>No records found.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    records.forEach(record => {
+        const row = document.createElement('tr');
+        row.className = 'record-row';
+        row.dataset.name = record.student_name.toLowerCase();
+        row.dataset.class = (record.student_class || '').toLowerCase();
+        row.dataset.date = record.date;
+        
+        const statusBadge = record.detention_flag 
+            ? `<span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">
+                   <i class="fas fa-exclamation-triangle"></i> DETENTION
+               </span>`
+            : `<span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                   <i class="fas fa-check"></i> OK
+               </span>`;
+        
+        row.innerHTML = `
+            <td class="px-6 py-4 text-sm text-gray-500">${record.id}</td>
+            <td class="px-6 py-4 font-medium">${record.student_name}</td>
+            <td class="px-6 py-4">${record.student_class || '-'}</td>
+            <td class="px-6 py-4">${record.offense}</td>
+            <td class="px-6 py-4">${record.teacher}</td>
+            <td class="px-6 py-4">${record.date}</td>
+            <td class="px-6 py-4">${statusBadge}</td>
+            ${isAdmin ? `
+            <td class="px-6 py-4">
+                <a href="/delete/${record.id}" 
+                   class="text-red-500 hover:text-red-700"
+                   onclick="return confirm('Delete this record?')">
+                    <i class="fas fa-trash"></i>
+                </a>
+            </td>
+            ` : ''}
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+// Filter functionality
+function filterRecords() {
+    const nameFilter = document.getElementById('searchName').value.toLowerCase();
+    const classFilter = document.getElementById('searchClass').value.toLowerCase();
+    const dateFilter = document.getElementById('searchDate').value;
+    
+    document.querySelectorAll('.record-row').forEach(row => {
+        const name = row.dataset.name;
+        const className = row.dataset.class;
+        const date = row.dataset.date;
+        
+        const show = (nameFilter === '' || name.includes(nameFilter)) &&
+                     (classFilter === '' || className.includes(classFilter)) &&
+                     (dateFilter === '' || date === dateFilter);
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Pause auto-refresh when tab is not visible
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        countdownInterval; // Pause
+    } else {
+        // Resume - you could restart the interval here if needed
+    }
+});
+</script>
+{% endblock %}
